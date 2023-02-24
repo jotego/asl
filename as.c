@@ -4243,20 +4243,6 @@ static void GlobExitProc(void)
 
 static int LineZ;
 
-static void NxtLine(void)
-{
-  if (++LineZ == 23)
-  {
-    LineZ = 0;
-    if (Redirected != NoRedir)
-      return;
-    WrConsoleLine(getmessage(Num_KeyWaitMsg), False);
-    fflush(stdout);
-    while (getchar() != '\n');
-    printf("%s", CursUp);
-  }
-}
-
 static void WrHead(void)
 {
   if (!QuietMode)
@@ -4264,12 +4250,12 @@ static void WrHead(void)
     String Tmp;
 
     as_snprintf(Tmp, sizeof(Tmp), "%s%s", getmessage(Num_InfoMessMacroAss), Version);
-    WrConsoleLine(Tmp, True); NxtLine();
+    WrConsoleLine(Tmp, True);
     as_snprintf(Tmp, sizeof(Tmp), "(%s-%s)", ARCHPRNAME, ARCHSYSNAME);
-    WrConsoleLine(Tmp, True); NxtLine();
-    WrConsoleLine(InfoMessCopyright, True); NxtLine();
-    WriteCopyrights(NxtLine);
-    WrConsoleLine("\n", True); NxtLine();
+    WrConsoleLine(Tmp, True);
+    WrConsoleLine(InfoMessCopyright, True);
+    WriteCopyrights();
+    WrConsoleLine("\n", True);
   }
 }
 
@@ -4492,15 +4478,13 @@ int main(int argc, char **argv)
   {
     WrHead();
     printf("%s%s%s\n", getmessage(Num_InfoMessHead1), GetEXEName(argv[0]), getmessage(Num_InfoMessHead2));
-    NxtLine();
     for (ph1 = getmessage(Num_InfoMessHelp), ph2 = strchr(ph1, '\n'); ph2; ph1 = ph2 + 1, ph2 = strchr(ph1, '\n'))
     {
       *ph2 = '\0';
       printf("%s\n", ph1);
-      NxtLine();
       *ph2 = '\n';
     }
-    PrintCPUList(NxtLine);
+    PrintCPUList();
     ClearCPUList();
     exit(1);
   }

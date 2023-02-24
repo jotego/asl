@@ -134,7 +134,7 @@ extern LongWord StackRes(void);
 
 extern void AddCopyright(const char *NewLine);
 
-extern void WriteCopyrights(TSwitchProc NxtProc);
+extern void WriteCopyrights();
 
 
 extern char *ChkSymbNameUpTo(const char *pSym, const char *pUpTo);

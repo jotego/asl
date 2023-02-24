@@ -66,7 +66,7 @@ extern const tCPUDef *LookupCPUDefByName(const char *pName);
 
 extern void IterateCPUList(tCPUListIterator Iterator, void *pUser);
 
-extern void PrintCPUList(tPrintNextCPUProc NxtProc);
+extern void PrintCPUList();
 
 extern void ClearCPUList(void);
 

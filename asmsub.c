@@ -73,18 +73,16 @@ void AddCopyright(const char *NewLine)
   AddStringListLast(&CopyrightList, NewLine);
 }
 
-void WriteCopyrights(TSwitchProc NxtProc)
+void WriteCopyrights()
 {
   StringRecPtr Lauf;
 
   if (!StringListEmpty(CopyrightList))
   {
     WrConsoleLine(GetStringListFirst(CopyrightList, &Lauf), True);
-    NxtProc();
     while (Lauf)
     {
       WrConsoleLine(GetStringListNext(&Lauf), True);
-      NxtProc();
     }
   }
 }
