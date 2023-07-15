@@ -150,6 +150,10 @@ dest	equ	r5
 	endexpect
 	endif
 
+	; @(Rn) was wrongly 'optimized' to @Rn up to Build 242:
+
+	adc	@(r4)
+
 	; -> immediate, which is actually (PC)+
 
 	mov	#1234,r3
@@ -1894,3 +1898,11 @@ fdest	reg	ac5
 	expect	180
 	nop			; ...resulting in a misalignment warning
 	endexpect
+
+	; PDP-11 is the only target that implements multi
+	; character constants in little endian mode, so this
+	; results in text in memory that is not byte swapped:
+
+	word	'Th','e ','qu','ic','k ','br','ow','n ','fo'
+	word	'x ','ju','mp','s ','ov','er',' t','he',' l'
+	word	'az','y ','do','g.'

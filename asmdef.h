@@ -23,7 +23,6 @@
 #include "tempresult.h"
 #include "addrspace.h"
 #include "chartrans.h"
-#include "cmdarg.h"
 
 typedef struct _TCrossRef
 {
@@ -203,9 +202,6 @@ typedef struct _ASSUMERec
   void (*pPostProc)(void);
 } ASSUMERec;
 
-extern as_cmd_rec_t *as_cmd_recs;
-extern size_t as_cmd_rec_cnt;
-
 extern StringPtr SourceFile;
 
 extern StringPtr CursUp;
@@ -272,7 +268,6 @@ extern Boolean NumericErrors;
 extern Boolean CodeOutput;
 extern Boolean MacProOutput;
 extern Boolean MacroOutput;
-extern Boolean QuietMode;
 extern Boolean HardRanges;
 extern const char *DivideChars;
 extern Boolean HasAttrs;
@@ -303,6 +298,7 @@ extern Boolean (*SetIsOccupiedFnc)(void),
                (*SaveIsOccupiedFnc)(void),
                (*RestoreIsOccupiedFnc)(void);
 extern Boolean SwitchIsOccupied, PageIsOccupied, ShiftIsOccupied;
+extern Boolean multi_char_le;
 extern Boolean (*DecodeAttrPart)(void);
 extern void (*MakeCode)(void);
 extern Boolean (*ChkPC)(LargeWord Addr);
@@ -337,6 +333,7 @@ extern const char *pCommentLeadIn;
 extern tStrComp *ArgStr;
 extern tStrComp LabPart, CommPart, ArgPart, OpPart, AttrPart;
 extern char AttrSplit;
+extern Boolean oppart_leading_dot;
 extern int ArgCnt;
 extern as_dynstr_t OneLine;
 #ifdef PROFILE_MEMO
@@ -386,10 +383,15 @@ extern void Default_DissectBit(char *pDest, size_t DestSize, LargeWord BitSpec);
 extern void AppendArg(size_t ReqSize);
 extern void InsertArg(int Index, size_t ReqSize);
 
+extern Boolean memo_set_pseudo(void);
+extern Boolean is_set_pseudo(void);
+extern Boolean is_save_pseudo(void);
+extern Boolean is_restore_pseudo(void);
+extern Boolean memo_switch_pseudo(void);
+extern Boolean memo_shift_pseudo(void);
+extern Boolean is_page_pseudo(void);
 
-extern Boolean SetIsOccupied(void);
-extern Boolean SaveIsOccupied(void);
-extern Boolean RestoreIsOccupied(void);
+extern void free_forward_symbol(PForwardSymbol p_symbol);
 
 extern void asmdef_init(void);
 #endif /* _ASMDEF_H */

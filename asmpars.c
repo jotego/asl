@@ -47,6 +47,7 @@
 
 tIntTypeDef IntTypeDefs[IntTypeCnt] =
 {
+  { 0x0000, 0, 0, 0 }, /* UInt0 */
   { 0x0001, 0, 0, 0 }, /* UInt1 */
   { 0x0002, 0, 0, 0 }, /* UInt2 */
   { 0x0003, 0, 0, 0 }, /* UInt3 */
@@ -335,8 +336,7 @@ IntType GetUIntTypeByBits(unsigned Bits)
     if (Lo(IntTypeDefs[Result].SignAndWidth) == Bits)
       return Result;
   }
-  fprintf(stderr, "define unsigned int type with %u bits\n", Bits);
-  exit(255);
+  return UInt0;
 }
 
 static Boolean ProcessBk(char **Start, char *Erg)
@@ -438,14 +438,20 @@ int NonZString2Int(const struct as_nonz_dynstr *p_str, LargeInt *p_result)
 {
   if ((p_str->len > 0) && (p_str->len <= 4))
   {
-    unsigned digit;
+    unsigned digit, shift;
     const char *p_run = p_str->p_str;
     size_t run_len = p_str->len;
     int ret;
 
-    *p_result = 0;
+    *p_result = shift = 0;
     while (!(ret = as_chartrans_xlate_next(CurrTransTable->p_table, &digit, &p_run, &run_len)))
-      *p_result = (*p_result << 8) | (digit & 0xff);
+      if (multi_char_le)
+      {
+        *p_result |= ((LargeWord)digit) << shift;
+        shift += 8;
+      }
+      else
+        *p_result = (*p_result << 8) | (digit & 0xff);
     /* ENOMEM -> regular end of string */
     return (ret == ENOMEM) ? 0 : ret;
   }
@@ -460,18 +466,19 @@ Boolean Int2NonZString(struct as_nonz_dynstr *p_str, LargeInt src)
   if (p_str->capacity < 32)
     as_nonz_dynstr_realloc(p_str, 32);
   p_str->len = 0;
-  p_dest = &p_str->p_str[p_str->capacity];
+  p_dest = &p_str->p_str[multi_char_le ? 0 : p_str->capacity];
   while (src && (p_str->len < p_str->capacity))
   {
     ret = as_chartrans_xlate_rev(CurrTransTable->p_table, src & 0xff);
     if (ret >= 0)
     {
-      *(--p_dest) = ret;
+      *(multi_char_le ? p_dest++ : --p_dest) = ret;
       p_str->len++;
     }
     src = (src >> 8) & 0xfffffful;
   }
-  memmove(p_str->p_str, p_dest, p_str->len);
+  if (!multi_char_le)
+    memmove(p_str->p_str, p_dest, p_str->len);
   return True;
 }
 
@@ -518,7 +525,7 @@ int TempResultToInt(TempResult *pResult)
  * \fn     MultiCharToInt(TempResult *pResult, unsigned MaxLen)
  * \brief  optionally convert multi-character constant to integer
  * \param  pResult holding value
- * \param  MaxLen maximum lenght of multi-character constant
+ * \param  MaxLen maximum length of multi-character constant
  * \return True if converted
  * ------------------------------------------------------------------------ */
 
@@ -1876,14 +1883,8 @@ LargeInt EvalStrIntExpressionWithResult(const tStrComp *pComp, IntType Type, tEv
 
       if ((l > 0) && (l <= 4))
       {
-        unsigned Digit;
-        const char *p_run = t.Contents.str.p_str;
-        size_t run_len = t.Contents.str.len;
-        int ret;
+        int ret = NonZString2Int(&t.Contents.str, &Result);
 
-        Result = 0;
-        while (!(ret = as_chartrans_xlate_next(CurrTransTable->p_table, &Digit, &p_run, &run_len)))
-          Result = (Result << 8) | Digit;
         if (ENOENT == ret)
         {
           WrStrErrorPos(ErrNum_UnmappedChar, pComp);
@@ -2338,27 +2339,28 @@ static void EnterLocSymbol(PSymbolEntry Neu)
   FirstLocSymbol = (PSymbolEntry)TreeRoot;
 }
 
-static void EnterSymbol_Search(PForwardSymbol *Lauf, PForwardSymbol *Prev,
-                               PForwardSymbol **RRoot, PSymbolEntry Neu,
-                               PForwardSymbol *Root, Byte ResCode, Byte *SearchErg)
+static Boolean EnterSymbol_SearchAndUnchain(PSymbolEntry Neu, PForwardSymbol *pp_root, LongInt *p_override_section)
 {
-  *Lauf = (*Root);
-  *Prev = NULL;
-  *RRoot = Root;
-  while ((*Lauf) && (strcmp((*Lauf)->Name, Neu->Tree.Name)))
-  {
-    *Prev = (*Lauf);
-    *Lauf = (*Lauf)->Next;
-  }
-  if (*Lauf)
-    *SearchErg = ResCode;
+  PForwardSymbol p_run, p_prev;
+
+  for (p_run = *pp_root, p_prev= NULL;
+       p_run;
+       p_prev = p_run, p_run = p_run->Next)
+    if (!strcmp(p_run->Name, Neu->Tree.Name))
+    {
+      *p_override_section = p_run->DestSection;
+      if (!p_prev)
+        *pp_root = p_run->Next;
+      else
+        p_prev->Next = p_run->Next;
+      free_forward_symbol(p_run);
+      return True;
+    }
+  return False;
 }
 
 static void EnterSymbol(PSymbolEntry Neu, Boolean MayChange, LongInt ResHandle)
 {
-  PForwardSymbol Lauf, Prev;
-  PForwardSymbol *RRoot;
-  Byte SearchErg;
   String CombName;
   PSaveSection RunSect;
   LongInt MSect;
@@ -2366,28 +2368,35 @@ static void EnterSymbol(PSymbolEntry Neu, Boolean MayChange, LongInt ResHandle)
   TEnterStruct EnterStruct;
   PTree TreeRoot = &(FirstSymbol->Tree);
 
-  SearchErg = 0;
   EnterStruct.MayChange = MayChange;
   EnterStruct.DoCross = MakeCrossList;
   Neu->Tree.Attribute = (ResHandle == -2) ? MomSectionHandle : ResHandle;
-  if ((SectionStack) && (Neu->Tree.Attribute == MomSectionHandle))
+
+  /* Within a section: special treatment for FORWARD, PUBLIC and GLOBAL: */
+
+  if (SectionStack && (Neu->Tree.Attribute == MomSectionHandle))
   {
-    EnterSymbol_Search(&Lauf, &Prev, &RRoot, Neu, &(SectionStack->LocSyms),
-                       1, &SearchErg);
-    if (!Lauf)
-      EnterSymbol_Search(&Lauf, &Prev, &RRoot, Neu,
-                         &(SectionStack->GlobSyms), 2, &SearchErg);
-    if (!Lauf)
-      EnterSymbol_Search(&Lauf, &Prev, &RRoot, Neu,
-                         &(SectionStack->ExportSyms), 3, &SearchErg);
-    if (SearchErg == 2)
-      Neu->Tree.Attribute = Lauf->DestSection;
-    if (SearchErg == 3)
+    LongInt override_section;
+
+    /* FORWARD: just an info to avoid resolution to global symbol.  This symbol remains
+       in current section: */
+
+    if (EnterSymbol_SearchAndUnchain(Neu, &(SectionStack->LocSyms), &override_section))
+    { }
+
+    /* PUBLIC: relocate scope of symbol to given section: */
+
+    else if (EnterSymbol_SearchAndUnchain(Neu, &(SectionStack->GlobSyms), &override_section))
+      Neu->Tree.Attribute = override_section;
+
+    /* GLOBAL: create copy with scope in given section: */
+
+    else if (EnterSymbol_SearchAndUnchain(Neu, &(SectionStack->ExportSyms), &override_section))
     {
       strmaxcpy(CombName, Neu->Tree.Name, STRINGSIZE);
       RunSect = SectionStack;
       MSect = MomSectionHandle;
-      while ((MSect != Lauf->DestSection) && (RunSect))
+      while ((MSect != override_section) && (RunSect))
       {
         strmaxprep(CombName, "_", STRINGSIZE);
         strmaxprep(CombName, GetSectionName(MSect), STRINGSIZE);
@@ -2397,7 +2406,7 @@ static void EnterSymbol(PSymbolEntry Neu, Boolean MayChange, LongInt ResHandle)
       Copy = (PSymbolEntry) calloc(1, sizeof(TSymbolEntry));
       *Copy = (*Neu);
       Copy->Tree.Name = as_strdup(CombName);
-      Copy->Tree.Attribute = Lauf->DestSection;
+      Copy->Tree.Attribute = override_section;
       Copy->SymWert.Relocs = DupRelocs(Neu->SymWert.Relocs);
       if (Copy->SymWert.Typ == TempString)
       {
@@ -2407,16 +2416,6 @@ static void EnterSymbol(PSymbolEntry Neu, Boolean MayChange, LongInt ResHandle)
                Copy->SymWert.Contents.str.len = Copy->SymWert.Contents.str.capacity = l);
       }
       EnterTree(&TreeRoot, &(Copy->Tree), SymbolAdder, &EnterStruct);
-    }
-    if (Lauf)
-    {
-      free(Lauf->Name);
-      free(Lauf->pErrorPos);
-      if (!Prev)
-        *RRoot = Lauf->Next;
-      else
-        Prev->Next = Lauf->Next;
-      free(Lauf);
     }
   }
   EnterTree(&TreeRoot, &(Neu->Tree), SymbolAdder, &EnterStruct);
@@ -3669,7 +3668,9 @@ void SetFlag(Boolean *Flag, const char *Name, Boolean Wert)
 
   *Flag = Wert;
   StrCompMkTemp(&TmpComp, (char*)Name, 0);
+  PushLocHandle(-1);
   EnterIntSymbol(&TmpComp, *Flag ? 1 : 0, SegNone, True);
+  PopLocHandle();
 }
 
 void AddDefSymbol(char *Name, TempResult *Value)
@@ -4163,7 +4164,9 @@ void PrintRegDefs(void)
 PTransTable FindCodepage(const char *p_name, PTransTable p_source)
 {
   PTransTable p_prev, p_run, p_new;
-  int cmp_res;
+  /* If TransTables is empty, p_name is right behind non-existing
+     last entry: */
+  int cmp_res = 1;
 
   for (p_run = TransTables, p_prev = NULL; p_run; p_prev = p_run, p_run = p_run->Next)
   {

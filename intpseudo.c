@@ -72,6 +72,8 @@ struct sLayoutCtx
   Boolean (*Put16F)(Double f, struct sLayoutCtx *pCtx);
   Boolean (*Put32I)(LongWord l, struct sLayoutCtx *pCtx);
   Boolean (*Put32F)(Double f, struct sLayoutCtx *pCtx);
+  Boolean (*Put48I)(LargeWord q, struct sLayoutCtx *pCtx);
+  Boolean (*Put48F)(Double f, struct sLayoutCtx *pCtx);
   Boolean (*Put64I)(LargeWord q, struct sLayoutCtx *pCtx);
   Boolean (*Put64F)(Double f, struct sLayoutCtx *pCtx);
   Boolean (*Put80F)(Double t, struct sLayoutCtx *pCtx);
@@ -569,6 +571,8 @@ static Boolean Replicate16ToN_To_16(const tCurrCodeFill *pStartPos, const tCurrC
 static Boolean LayoutWord(const tStrComp *pExpr, struct sLayoutCtx *pCtx)
 {
   Boolean Result = False;
+  const Boolean allow_string = !!(pCtx->flags & eIntPseudoFlag_AllowString),
+                allow_float = !!pCtx->Put16F;
   TempResult t;
 
   as_tempres_ini(&t);
@@ -594,7 +598,7 @@ static Boolean LayoutWord(const tStrComp *pExpr, struct sLayoutCtx *pCtx)
         TempResultToFloat(&t);
       /* fall-through */
     case TempFloat:
-      if (!pCtx->Put16F) WrStrErrorPos(ErrNum_StringOrIntButFloat, pExpr);
+      if (!allow_float) WrStrErrorPos(allow_string ? ErrNum_StringOrIntButFloat : ErrNum_IntButFloat, pExpr);
       else if (!FloatRangeCheck(t.Contents.Float, Float16)) WrStrErrorPos(ErrNum_OverRange, pExpr);
       else
       {
@@ -604,22 +608,34 @@ static Boolean LayoutWord(const tStrComp *pExpr, struct sLayoutCtx *pCtx)
       }
       break;
     case TempString:
-    {
-      unsigned z;
+      if (!allow_string) WrStrErrorPos(allow_float ? ErrNum_IntOrFloatButString : ErrNum_IntButString, pExpr);
+      else
+      {
+        unsigned z;
 
-      if (MultiCharToInt(&t, 2))
-        goto ToInt;
+        if (MultiCharToInt(&t, 2))
+          goto ToInt;
 
-      if (as_chartrans_xlate_nonz_dynstr(CurrTransTable->p_table, &t.Contents.str, pExpr))
-        LEAVE;
-
-      for (z = 0; z < t.Contents.str.len; z++)
-        if (!pCtx->Put16I(t.Contents.str.p_str[z], pCtx))
+        if (as_chartrans_xlate_nonz_dynstr(CurrTransTable->p_table, &t.Contents.str, pExpr))
           LEAVE;
 
-      Result = True;
+        for (z = 0; z < t.Contents.str.len; z++)
+          if (!pCtx->Put16I(t.Contents.str.p_str[z], pCtx))
+            LEAVE;
+
+        Result = True;
+      }
       break;
-    }
+    case TempReg:
+      if (allow_float && allow_string)
+        WrStrErrorPos(ErrNum_StringOrIntOrFloatButReg, pExpr);
+      else if (allow_float)
+        WrStrErrorPos(ErrNum_IntOrFloatButReg, pExpr);
+      else if (allow_string)
+        WrStrErrorPos(ErrNum_IntOrStringButReg, pExpr);
+      else
+        WrStrErrorPos(ErrNum_IntButReg, pExpr);
+      break;
     default:
       break;
   }
@@ -694,6 +710,8 @@ static Boolean LayoutDoubleWord(const tStrComp *pExpr, struct sLayoutCtx *pCtx)
 {
   TempResult erg;
   Boolean Result = False;
+  const Boolean allow_string = !!(pCtx->flags & eIntPseudoFlag_AllowString),
+                allow_float = !!pCtx->Put32F;
   Word Cnt = 0;
 
   as_tempres_ini(&erg);
@@ -722,7 +740,7 @@ static Boolean LayoutDoubleWord(const tStrComp *pExpr, struct sLayoutCtx *pCtx)
         TempResultToFloat(&erg);
       /* fall-through */
     case TempFloat:
-      if (!pCtx->Put32F) WrStrErrorPos(ErrNum_StringOrIntButFloat, pExpr);
+      if (!allow_float) WrStrErrorPos(allow_string ? ErrNum_StringOrIntButFloat : ErrNum_IntButFloat, pExpr);
       else if (!FloatRangeCheck(erg.Contents.Float, Float32)) WrStrErrorPos(ErrNum_OverRange, pExpr);
       else
       {
@@ -733,20 +751,182 @@ static Boolean LayoutDoubleWord(const tStrComp *pExpr, struct sLayoutCtx *pCtx)
       }
       break;
     case TempString:
+      if (!allow_string) WrStrErrorPos(allow_float ? ErrNum_IntOrFloatButString : ErrNum_IntButString, pExpr);
+      else
+      {
+        unsigned z;
+
+        if (MultiCharToInt(&erg, 4))
+          goto ToInt;
+
+        if (as_chartrans_xlate_nonz_dynstr(CurrTransTable->p_table, &erg.Contents.str, pExpr))
+          WrStrErrorPos(ErrNum_UnmappedChar, pExpr);
+
+        for (z = 0; z < erg.Contents.str.len; z++)
+          if (!pCtx->Put32I(erg.Contents.str.p_str[z], pCtx))
+            LEAVE;
+
+        Cnt = erg.Contents.str.len * 4;
+        Result = True;
+      }
+      break;
+    case TempReg:
+      if (allow_float && allow_string)
+        WrStrErrorPos(ErrNum_StringOrIntOrFloatButReg, pExpr);
+      else if (allow_float)
+        WrStrErrorPos(ErrNum_IntOrFloatButReg, pExpr);
+      else if (allow_string)
+        WrStrErrorPos(ErrNum_IntOrStringButReg, pExpr);
+      else
+        WrStrErrorPos(ErrNum_IntButReg, pExpr);
+      break;
+    case TempAll:
+      assert(0);
+  }
+  (void)Cnt;
+
+func_exit:
+  as_tempres_free(&erg);
+  return Result;
+}
+
+
+/*****************************************************************************
+ * Function:    LayoutMacAddr
+ * Purpose:     parse argument, interprete as 48-bit word or
+                float, and put into result buffer
+ * Result:      TRUE if no errors occured
+ *****************************************************************************/
+
+static Boolean Put48I_To_8(LargeWord l, struct sLayoutCtx *pCtx)
+{
+  if (!IncMaxCodeLen(pCtx, 8))
+    return False;
+  BAsmCode[pCtx->CurrCodeFill.FullWordCnt + (0 ^ pCtx->LoHiMap)      ] = (l      ) & 0xff;
+  BAsmCode[pCtx->CurrCodeFill.FullWordCnt + (1 ^ pCtx->LoHiMap)      ] = (l >>  8) & 0xff;
+  BAsmCode[pCtx->CurrCodeFill.FullWordCnt + (2 ^ (pCtx->LoHiMap & 1))] = (l >> 16) & 0xff;
+  BAsmCode[pCtx->CurrCodeFill.FullWordCnt + (3 ^ (pCtx->LoHiMap & 1))] = (l >> 24) & 0xff;
+#ifdef HAS64
+  BAsmCode[pCtx->CurrCodeFill.FullWordCnt + (4 ^ pCtx->LoHiMap)      ] = (l >> 32) & 0xff;
+  BAsmCode[pCtx->CurrCodeFill.FullWordCnt + (5 ^ pCtx->LoHiMap)      ] = (l >> 40) & 0xff;
+#else
+  /* TempResult is TempInt, so sign-extend */
+  BAsmCode[pCtx->CurrCodeFill.FullWordCnt + (4 ^ pCtx->LoHiMap)      ] =
+  BAsmCode[pCtx->CurrCodeFill.FullWordCnt + (5 ^ pCtx->LoHiMap)      ] = (l & 0x80000000ul) ? 0xff : 0x00;
+#endif
+  pCtx->CurrCodeFill.FullWordCnt += 6;
+  return True;
+}
+
+static Boolean Put48F_To_8(Double t, struct sLayoutCtx *pCtx)
+{
+  /* make space for 8 bytes - last word of D format float is truncated */
+  if (!IncMaxCodeLen(pCtx, 8))
+    return False;
+  if (pCtx->flags & eIntPseudoFlag_DECFormat)
+  {
+    /* LoHiMap (endianess) is ignored */
+    int ret = Double_2_dec8(t, WAsmCode + (pCtx->CurrCodeFill.FullWordCnt / 2));
+    if (ret)
+    {
+      check_dec_fp_dispose_result(ret, pCtx->pCurrComp);
+      return False;
+    }
+  }
+  else
+    assert(0);  /* no 6 byte IEEE float format */
+  pCtx->CurrCodeFill.FullWordCnt += 6;
+  return True;
+}
+
+static Boolean Put48I_To_16(LargeWord l, struct sLayoutCtx *pCtx)
+{
+  int LoHiMap = pCtx->LoHiMap ? 2 : 0; /* 5 or 0 -> 2 or 0 */
+
+  if (!IncMaxCodeLen(pCtx, 3))
+    return False;
+  WAsmCode[pCtx->CurrCodeFill.FullWordCnt + (0 ^ LoHiMap)      ] = (l      ) & 0xffff;
+  WAsmCode[pCtx->CurrCodeFill.FullWordCnt + (1 ^ (LoHiMap & 1))] = (l >> 16) & 0xffff;
+#ifdef HAS64
+  WAsmCode[pCtx->CurrCodeFill.FullWordCnt + (2 ^ LoHiMap)      ] = (l >> 32) & 0xffff;
+#else
+  /* TempResult is TempInt, so sign-extend */
+  WAsmCode[pCtx->CurrCodeFill.FullWordCnt + (2 ^ LoHiMap)      ] = (l & 0x80000000ul) ? 0xffff : 0x0000;
+#endif
+  pCtx->CurrCodeFill.FullWordCnt += 3;
+  return True;
+}
+
+static Boolean Put48F_To_16(Double t, struct sLayoutCtx *pCtx)
+{
+  if (!IncMaxCodeLen(pCtx, 3))
+    return False;
+  if (pCtx->flags & eIntPseudoFlag_DECFormat)
+  {
+    Word Tmp[4];
+    int ret = Double_2_dec8(t, Tmp);
+    if (ret)
+    {
+      check_dec_fp_dispose_result(ret, pCtx->pCurrComp);
+      return False;
+    }
+    /* LoHiMap (endianess) is ignored */
+    memcpy(&WAsmCode[pCtx->CurrCodeFill.FullWordCnt], Tmp, 6);
+  }
+  else
+    assert(0);  /* no 6 byte IEEE float format */
+  pCtx->CurrCodeFill.FullWordCnt += 3;
+  return True;
+}
+
+static Boolean LayoutMacAddr(const tStrComp *pExpr, struct sLayoutCtx *pCtx)
+{
+  Boolean Result = False;
+  TempResult erg;
+  Word Cnt  = 0;
+
+  as_tempres_ini(&erg);
+  EvalStrExpression(pExpr, &erg);
+  Result = False;
+  switch(erg.Typ)
+  {
+    case TempNone:
+      break;
+    case TempInt:
+    ToInt:
+      if (pCtx->Put48I)
+      {
+        if (!pCtx->Put64I(erg.Contents.Int, pCtx))
+          LEAVE;
+        Cnt = 6;
+        Result = True;
+        break;
+      }
+      else
+        TempResultToFloat(&erg);
+      /* fall-through */
+    case TempFloat:
+      if (!pCtx->Put48F) WrStrErrorPos(ErrNum_StringOrIntButFloat, pExpr);
+      else if (!pCtx->Put48F(erg.Contents.Float, pCtx))
+        LEAVE;
+      Cnt = 6;
+      Result = True;
+      break;
+    case TempString:
     {
       unsigned z;
 
-      if (MultiCharToInt(&erg, 4))
+      if (MultiCharToInt(&erg, 6))
         goto ToInt;
 
       if (as_chartrans_xlate_nonz_dynstr(CurrTransTable->p_table, &erg.Contents.str, pExpr))
-        WrStrErrorPos(ErrNum_UnmappedChar, pExpr);
+        LEAVE;
 
       for (z = 0; z < erg.Contents.str.len; z++)
-        if (!pCtx->Put32I(erg.Contents.str.p_str[z], pCtx))
+        if (!pCtx->Put48I(erg.Contents.str.p_str[z], pCtx))
           LEAVE;
 
-      Cnt = erg.Contents.str.len * 4;
+      Cnt = erg.Contents.str.len * 6;
       Result = True;
       break;
     }
@@ -762,7 +942,6 @@ func_exit:
   as_tempres_free(&erg);
   return Result;
 }
-
 
 /*****************************************************************************
  * Function:    LayoutQuadWord
@@ -851,13 +1030,15 @@ static Boolean Put64F_To_16(Double t, struct sLayoutCtx *pCtx)
 static Boolean LayoutQuadWord(const tStrComp *pExpr, struct sLayoutCtx *pCtx)
 {
   Boolean Result = False;
+  const Boolean allow_string = !!(pCtx->flags & eIntPseudoFlag_AllowString),
+                allow_float = !!pCtx->Put64F;
   TempResult erg;
   Word Cnt  = 0;
 
   as_tempres_ini(&erg);
   EvalStrExpression(pExpr, &erg);
   Result = False;
-  switch(erg.Typ)
+  switch (erg.Typ)
   {
     case TempNone:
       break;
@@ -875,30 +1056,32 @@ static Boolean LayoutQuadWord(const tStrComp *pExpr, struct sLayoutCtx *pCtx)
         TempResultToFloat(&erg);
       /* fall-through */
     case TempFloat:
-      if (!pCtx->Put64F) WrStrErrorPos(ErrNum_StringOrIntButFloat, pExpr);
+      if (!allow_float) WrStrErrorPos(ErrNum_StringOrIntButFloat, pExpr);
       else if (!pCtx->Put64F(erg.Contents.Float, pCtx))
         LEAVE;
       Cnt = 8;
       Result = True;
       break;
     case TempString:
-    {
-      unsigned z;
+      if (!allow_string) WrStrErrorPos(allow_float ? ErrNum_IntOrFloatButString : ErrNum_IntButString, pExpr);
+      else
+      {
+         unsigned z;
 
-      if (MultiCharToInt(&erg, 8))
-        goto ToInt;
+        if (MultiCharToInt(&erg, 8))
+          goto ToInt;
 
-      if (as_chartrans_xlate_nonz_dynstr(CurrTransTable->p_table, &erg.Contents.str, pExpr))
-        LEAVE;
-
-      for (z = 0; z < erg.Contents.str.len; z++)
-        if (!pCtx->Put64I(erg.Contents.str.p_str[z], pCtx))
+        if (as_chartrans_xlate_nonz_dynstr(CurrTransTable->p_table, &erg.Contents.str, pExpr))
           LEAVE;
 
-      Cnt = erg.Contents.str.len * 8;
-      Result = True;
+        for (z = 0; z < erg.Contents.str.len; z++)
+          if (!pCtx->Put64I(erg.Contents.str.p_str[z], pCtx))
+            LEAVE;
+
+        Cnt = erg.Contents.str.len * 8;
+        Result = True;
+      }
       break;
-    }
     case TempReg:
       WrStrErrorPos(ErrNum_StringOrIntOrFloatButReg, pExpr);
       break;
@@ -1401,6 +1584,40 @@ void DecodeIntelDD(Word Flags)
 }
 
 /*!------------------------------------------------------------------------
+ * \fn     DecodeIntelDM(Word Flags)
+ * \brief  Intel-style constant disposition - 48-bit words
+ * \param  Flags Data Type & Endianess Flags
+ * ------------------------------------------------------------------------ */
+
+void DecodeIntelDM(Word Flags)
+{
+  tLayoutCtx LayoutCtx;
+
+  memset(&LayoutCtx, 0, sizeof(LayoutCtx));
+  LayoutCtx.LayoutFunc = LayoutMacAddr;
+  LayoutCtx.BaseElemLenBits = 48;
+  LayoutCtx.flags = Flags;
+  switch (Grans[ActPC])
+  {
+    case 1:
+      LayoutCtx.Put48I = (Flags & eIntPseudoFlag_AllowInt) ? Put48I_To_8 : NULL;
+      LayoutCtx.Put48F = (Flags & eIntPseudoFlag_AllowFloat) ? Put48F_To_8 : NULL;
+      LayoutCtx.LoHiMap = (Flags & eIntPseudoFlag_BigEndian) ? 5 : 0;
+      LayoutCtx.Replicate = Replicate8ToN_To_8;
+      break;
+    case 2:
+      LayoutCtx.Put48I = (Flags & eIntPseudoFlag_AllowInt) ? Put48I_To_16 : NULL;
+      LayoutCtx.Put48F = (Flags & eIntPseudoFlag_AllowFloat) ? Put48F_To_16 : NULL;
+      LayoutCtx.LoHiMap = (Flags & eIntPseudoFlag_BigEndian) ? 2 : 0;
+      LayoutCtx.Replicate = Replicate16ToN_To_16;
+      break;
+  }
+  if (*LabPart.str.p_str)
+    SetSymbolOrStructElemSize(&LabPart, eSymbolSize48Bit);
+  DecodeIntelDx(&LayoutCtx);
+}
+
+/*!------------------------------------------------------------------------
  * \fn     DecodeIntelDQ(Word Flags)
  * \brief  Intel-style constant disposition - 64-bit words
  * \param  Flags Data Type & Endianess Flags
@@ -1467,14 +1684,13 @@ void DecodeIntelDT(Word Flags)
 }
 
 /*!------------------------------------------------------------------------
- * \fn     DecodeIntelDS(Word Code)
+ * \fn     DecodeIntelDS(Word item_size)
  * \brief  Intel-style memory reservation
+ * \param  item_size # of bytes per reserved item
  * ------------------------------------------------------------------------ */
 
-void DecodeIntelDS(Word Code)
+void DecodeIntelDS(Word item_size)
 {
-  UNUSED(Code);
-
   if (ChkArgCnt(1, 1))
   {
     tSymbolFlags Flags;
@@ -1485,7 +1701,7 @@ void DecodeIntelDS(Word Code)
     else if (OK)
     {
       DontPrint = True;
-      CodeLen = HVal;
+      CodeLen = HVal * (LongInt)item_size;
       if (!HVal)
         WrError(ErrNum_NullResMem);
       BookKeeping();
@@ -1511,12 +1727,12 @@ Boolean DecodeIntelPseudo(Boolean BigEndian)
     Word Flag = BigEndian ? eIntPseudoFlag_BigEndian : eIntPseudoFlag_None;
 
     AddInstTable(InstTable, "DN", Flag | eIntPseudoFlag_AllowInt, DecodeIntelDN);
-    AddInstTable(InstTable, "DB", Flag | eIntPseudoFlag_AllowInt, DecodeIntelDB);
-    AddInstTable(InstTable, "DW", Flag | eIntPseudoFlag_AllowInt | eIntPseudoFlag_AllowFloat, DecodeIntelDW);
-    AddInstTable(InstTable, "DD", Flag | eIntPseudoFlag_AllowInt | eIntPseudoFlag_AllowFloat, DecodeIntelDD);
-    AddInstTable(InstTable, "DQ", Flag | eIntPseudoFlag_AllowInt | eIntPseudoFlag_AllowFloat, DecodeIntelDQ);
-    AddInstTable(InstTable, "DT", Flag | eIntPseudoFlag_AllowInt | eIntPseudoFlag_AllowFloat, DecodeIntelDT);
-    AddInstTable(InstTable, "DS", 0, DecodeIntelDS);
+    AddInstTable(InstTable, "DB", Flag | eIntPseudoFlag_AllowInt | eIntPseudoFlag_AllowString, DecodeIntelDB);
+    AddInstTable(InstTable, "DW", Flag | eIntPseudoFlag_AllowInt | eIntPseudoFlag_AllowString | eIntPseudoFlag_AllowFloat, DecodeIntelDW);
+    AddInstTable(InstTable, "DD", Flag | eIntPseudoFlag_AllowInt | eIntPseudoFlag_AllowString | eIntPseudoFlag_AllowFloat, DecodeIntelDD);
+    AddInstTable(InstTable, "DQ", Flag | eIntPseudoFlag_AllowInt | eIntPseudoFlag_AllowString | eIntPseudoFlag_AllowFloat, DecodeIntelDQ);
+    AddInstTable(InstTable, "DT", Flag | eIntPseudoFlag_AllowInt | eIntPseudoFlag_AllowString | eIntPseudoFlag_AllowFloat, DecodeIntelDT);
+    AddInstTable(InstTable, "DS", 1, DecodeIntelDS);
     InstTables[Idx] = InstTable;
   }
   return LookupInstTable(InstTables[Idx], OpPart.str.p_str);

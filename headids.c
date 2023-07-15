@@ -46,7 +46,9 @@ static const TFamilyDescr Descrs[] =
   { "MCS-48"       , 0x0021, eHexFormatIntel   },
   { "MCS-(2)51"    , 0x0031, eHexFormatIntel   },
   { "MCS-96/196"   , 0x0039, eHexFormatIntel   },
-  { "PDP-11"       , 0x000e, eHexFormatMotoS   },
+  { "PDP-11"       , 0x0023, eHexFormatMotoS   },
+  { "WD16"         , 0x0024, eHexFormatMotoS   },
+  { "VAX"          , 0x0026, eHexFormatMotoS   },
   { "4004/4040"    , 0x003f, eHexFormatIntel   },
   { "8008"         , 0x003e, eHexFormatIntel   },
   { "8080/8085"    , 0x0041, eHexFormatIntel   },
@@ -133,6 +135,7 @@ static const TFamilyDescr Descrs[] =
   { "CP1600"       , 0x000a, eHexFormatIntel   },
   { "NANO"         , 0x000b, eHexFormatIntel   },
   { "IM6100"       , 0x000c, eHexFormatIntel   },
+  { "RX"           , 0x001e, eHexFormatIntel32 },
   { NULL           , 0xffff, eHexFormatDefault }
 };
 

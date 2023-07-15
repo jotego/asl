@@ -32,14 +32,16 @@ enum
   eIntPseudoFlag_BigEndian = 1 << 0,
   eIntPseudoFlag_AllowInt = 1 << 1,
   eIntPseudoFlag_AllowFloat = 1 << 2,
-  eIntPseudoFlag_DECFormat = 1 << 3,
-  eIntPseudoFlag_Turn = 1 << 4
+  eIntPseudoFlag_AllowString = 1 << 3,
+  eIntPseudoFlag_DECFormat = 1 << 4,
+  eIntPseudoFlag_Turn = 1 << 5
 };
 
 extern void DecodeIntelDN(Word Flags);
 extern void DecodeIntelDB(Word Flags);
 extern void DecodeIntelDW(Word Flags);
 extern void DecodeIntelDD(Word Flags);
+extern void DecodeIntelDM(Word Flags);
 extern void DecodeIntelDQ(Word Flags);
 extern void DecodeIntelDT(Word Flags);
 extern void DecodeIntelDS(Word Flags);

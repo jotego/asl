@@ -38,7 +38,7 @@
 
 #ifdef __TURBOC__
 #ifdef __DPMI16__
-#define STKSIZE 33792
+#define STKSIZE 32768
 #else
 #define STKSIZE 49152
 #endif
@@ -73,20 +73,14 @@ void AddCopyright(const char *NewLine)
   AddStringListLast(&CopyrightList, NewLine);
 }
 
-void WriteCopyrights(TSwitchProc NxtProc)
+void WriteCopyrights(void(*PrintProc)(const char *))
 {
   StringRecPtr Lauf;
+  const char *p_line;
 
-  if (!StringListEmpty(CopyrightList))
-  {
-    WrConsoleLine(GetStringListFirst(CopyrightList, &Lauf), True);
-    NxtProc();
-    while (Lauf)
-    {
-      WrConsoleLine(GetStringListNext(&Lauf), True);
-      NxtProc();
-    }
-  }
+  for (p_line = GetStringListFirst(CopyrightList, &Lauf);
+       p_line; p_line = GetStringListNext(&Lauf))
+    PrintProc(p_line);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -497,7 +491,7 @@ void AddSuffix(char *s, const char *Suff)
 
   p = NULL;
   for (z = s; *z != '\0'; z++)
-    if (*z == '\\')
+    if (*z == PATHSEP)
       p = z;
   Part = p ? p : s;
   if (!strchr(Part, '.'))
@@ -514,7 +508,7 @@ void KillSuffix(char *s)
 
   p = NULL;
   for (z = s; *z != '\0'; z++)
-    if (*z == '\\')
+    if (*z == PATHSEP)
       p = z;
   Part = p ? p : s;
   Part = strchr(Part, '.');
@@ -1312,7 +1306,7 @@ void RemoveIncludeList(char *RemPath)
   String Save;
   char *Part;
 
-  strmaxcpy(IncludeList, Save, STRINGSIZE);
+  strmaxcpy(Save, IncludeList, STRINGSIZE);
   IncludeList[0] = '\0';
   while (Save[0] != '\0')
   {
@@ -1344,9 +1338,9 @@ void RemoveFromOutList(const char *OldName)
   RemoveStringList(&OutList, OldName);
 }
 
-char *GetFromOutList(void)
+char *MoveFromOutListFirst(void)
 {
-  return GetAndCutStringList(&OutList);
+  return MoveAndCutStringListFirst(&OutList);
 }
 
 void ClearShareOutList(void)
@@ -1364,9 +1358,9 @@ void RemoveFromShareOutList(const char *OldName)
   RemoveStringList(&ShareOutList, OldName);
 }
 
-char *GetFromShareOutList(void)
+char *MoveFromShareOutListFirst(void)
 {
-  return GetAndCutStringList(&ShareOutList);
+  return MoveAndCutStringListFirst(&ShareOutList);
 }
 
 void ClearListOutList(void)
@@ -1384,9 +1378,9 @@ void RemoveFromListOutList(const char *OldName)
   RemoveStringList(&ListOutList, OldName);
 }
 
-char *GetFromListOutList(void)
+char *MoveFromListOutListFirst(void)
 {
-  return GetAndCutStringList(&ListOutList);
+  return MoveAndCutStringListFirst(&ListOutList);
 }
 
 /****************************************************************************/

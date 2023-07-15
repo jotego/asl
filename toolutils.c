@@ -21,6 +21,9 @@
 #include "nls.h"
 #include "nlmessages.h"
 #include "tools.rsc"
+#ifdef _USE_MSH
+# include "tools.msh"
+#endif
 
 #include "toolutils.h"
 
@@ -37,7 +40,7 @@ const char *OutName = "STDOUT";   /* Pseudoname Output */
 
 static TMsgCat MsgCat;
 
-Boolean QuietMode;
+Boolean QuietMode, Verbose;
 
 /****************************************************************************/
 
@@ -388,9 +391,9 @@ as_cmd_result_t CMD_FilterList(Boolean Negate, const char *Arg)
   return e_cmd_arg;
 }
 
-extern as_cmd_result_t CMD_Range(LongWord *pStartAddr, LongWord *pStopAddr,
-                           Boolean *pStartAuto, Boolean *pStopAuto,
-                           const char *Arg)
+as_cmd_result_t CMD_Range(LongWord *pStartAddr, LongWord *pStopAddr,
+                          Boolean *pStartAuto, Boolean *pStopAuto,
+                          const char *Arg)
 {
   const char *p;
   String StartStr;
@@ -427,6 +430,14 @@ as_cmd_result_t CMD_QuietMode(Boolean Negate, const char *Arg)
   UNUSED(Arg);
 
   QuietMode = !Negate;
+  return e_cmd_ok;
+}
+
+as_cmd_result_t CMD_Verbose(Boolean Negate, const char *Arg)
+{
+  UNUSED(Arg);
+
+  Verbose = !Negate;
   return e_cmd_ok;
 }
 
@@ -491,7 +502,12 @@ void toolutils_init(const char *ProgPath)
 {
   version_init();
 
-  opencatalog(&MsgCat, "tools.msg", ProgPath, MsgId1, MsgId2);
+#ifdef _USE_MSH
+  msg_catalog_open_buffer(&MsgCat, tools_msh_data, sizeof(tools_msh_data), MsgId1, MsgId2);
+  UNUSED(ProgPath);
+#else
+  msg_catalog_open_file(&MsgCat, "tools.msg", ProgPath, MsgId1, MsgId2);
+#endif
 
   FilterCnt = 0;
   DoFilter = False;
