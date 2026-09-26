@@ -1,0 +1,30 @@
+# -------------------------------------------------------------------------
+# choose your compiler (must be ANSI-compliant!) and linker command, plus
+# any additionally needed flags
+
+OBJDIR =
+CC = xlc
+CFLAGS = -O3 -qarch=pwr2 -qtune=pwr2
+#            ^^^^^^^^^^^^^^^^^^^^^^^
+#            |||||||||||||||||||||||
+# adapt to your processor architecture (pwr/pwr2/ppc)
+HOST_OBJEXTENSION = .o
+LD = xlc
+LDFLAGS =
+HOST_EXEXTENSION =
+
+# no cross build
+
+TARG_OBJDIR = $(OBJDIR)
+TARG_CC = $(CC)
+TARG_CFLAGS = $(CFLAGS)
+TARG_OBJEXTENSION = $(HOST_OBJEXTENSION)
+TARG_LD = $(LD)
+TARG_LDFLAGS = $(LDFLAGS)
+TARG_EXEXTENSION = $(HOST_EXEXTENSION)
+
+# -------------------------------------------------------------------------
+# directory where binaries, includes, and manpages should go during
+# installation:
+
+INSTROOT:=/usr/local

@@ -1,0 +1,19 @@
+- README-Verweise in Anleitung
+- Anleitung: Lieferumfang : Binaer-Basis, Zusatzfiles, Source wird
+  bisheriger Unix-Teil
+- Anleitung: Quellenkapitel neuschreiben
+- Anleitung: FAQ wenn viele Passes
+- Anleitung FAQ Include-Path Änderung
+
+- Forward:
+  - EnterNoneSymbol einführen
+    - Wenn existent, gleich NOP
+  - Enter Nicht-None-Symbol überschreibt None-Symbol
+  - NoneSymbol in Symboltabelle Dump berücksichtigen
+  - Lookup None wie nicht gefunden
+
+- FwdRefList:
+  - store MomLocHandle & SectStack an Eintrag
+  - Match mit neuem (nicht none) Eintrag: Sektion liegt 
+    in Stack der FwdRef
+  - FwdRef nur einmal auflösen

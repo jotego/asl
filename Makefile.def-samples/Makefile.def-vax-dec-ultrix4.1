@@ -1,0 +1,35 @@
+# -------------------------------------------------------------------------
+# choose your compiler (must be ANSI-compliant!) and linker command, plus
+# any additionally needed flags
+
+# Uncomment these two lines to use G instead of D floating point format:
+# Expect a few tests to fail due to rounding errors.
+
+#GFLOAT=-mg
+#LIBM=-lmg
+
+# Explicitly asking for C99 and thereby long long (64 bit) support
+
+OBJDIR =
+CC = gcc
+CFLAGS = -O2 -fomit-frame-pointer -Wall -std=c99
+HOST_OBJEXTENSION = .o
+LD = gcc
+LDFLAGS = -lcV
+HOST_EXEXTENSION =
+
+# no cross build
+
+TARG_OBJDIR = $(OBJDIR)
+TARG_CC = $(CC) $(GFLOAT)
+TARG_CFLAGS = $(CFLAGS)
+TARG_OBJEXTENSION = $(HOST_OBJEXTENSION)
+TARG_LD = $(LD) $(GFLOAT)
+TARG_LDFLAGS = $(LDFLAGS)
+TARG_EXEXTENSION = $(HOST_EXEXTENSION)
+
+# -------------------------------------------------------------------------
+# directory where binaries, includes, and manpages should go during
+# installation:
+
+INSTROOT:=/usr/local

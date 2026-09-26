@@ -1,0 +1,87 @@
+;SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only
+;* tools.mes
+;*****************************************************************************
+;* AS-Portierung                                                             *
+;*                                                                           *
+;* Stringdefinitionen, die alle AS-Tools brauchen                            *
+;*                                                                           *
+;* Historie: 31. 5.1996 Grundsteinlegung                                     *
+;*                                                                           *
+;*****************************************************************************
+
+;-----------------------------------------------------------------------------
+; Durchsagen
+
+Message InfoMessUsage
+ "Aufruf: "
+ "usage: "
+
+;-----------------------------------------------------------------------------
+; Fehlermeldungen
+
+Message FormatInvHeaderMsg
+ "ung&uuml;ltiger Dateikopf"
+ "invalid file header"
+
+Message FormatInvRecordHeaderMsg
+ "ung&uuml;ltiger Datensatzkopf"
+ "invalid record header"
+
+Message FormatInvRecordLenMsg
+ "fehlerhafte Datensatzl&auml;nge"
+ "invalid record length"
+
+Message ErrMsgNullMaskA
+ "Warnung : Dateimaske "
+ "warning : file mask "
+
+Message ErrMsgNullMaskB
+ " pa&szlig;t auf keine Datei!"
+ " does not fit to any file!"
+
+Message ErrMsgInvEnvParam
+ "Fehlerhafter Environment-Parameter (-help f&uuml;r Hilfe): "
+ "invalid environment parameter (-help for help): "
+
+Message ErrMsgInvParam
+ "Fehlerhafter Parameter (-help f&uuml;r Hilfe): "
+ "invalid parameter (-help for help): "
+
+Message ErrMsgInvEnvOption
+ "Fehlerhafte Environment-Option (-help f&uuml;r Hilfe): "
+ "invalid environment option (-help for help): "
+
+Message ErrMsgInvOption
+ "Fehlerhafte Option (-help f&uuml;r Hilfe): "
+ "invalid option (-help for help): "
+
+Message ErrMsgTargMissing
+ "Zieldateiangabe fehlt!"
+ "destination file specification missing!"
+ 
+Message ErrMsgAutoFailed
+ "Automatische Bereichserkennung fehlgeschlagen, leere Quelldatei(en)?"
+ "automatic range setting failed, empty source file(s)?"
+
+Message ErrMsgMaxGranFailed
+ "Ermittlung der Adre&szlig;raum-Granularit&auml;t fehlgeschlagen, leere Quelldatei(en)?"
+ "address space granularity deduction failed, empty source file(s)?"
+
+Message ErrMsgOverlap
+ "Warnung: &uuml;berlappende Belegung!"
+ "warning: overlapping memory allocation!"
+
+Message ErrMsgProgTerm
+ "Programmabbruch"
+ "program terminated"
+
+Message ErrMessNoInputFiles
+ "keine Quelldateien (-help f&uuml;r Hilfe)"
+ "no input files (-help for help)"
+
+;---------------------------------------------------------------------------
+
+Message Suffix
+ ".p"
+ ".p"
+
