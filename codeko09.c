@@ -4,7 +4,7 @@
 /*                                                                           */
 /* AS-Portierung                                                             */
 /*                                                                           */
-/* Code Generator Konami 052001                                              */
+/* Code Generator Konami 052001 / 053248                                     */
 /*                                                                           */
 /*****************************************************************************/
 
@@ -49,6 +49,7 @@ typedef struct
 
 static const char reg_16_names[4] = { 'X','Y','U','S' };
 static LongInt DPRValue;
+static Boolean Is053248;
 
 /*!------------------------------------------------------------------------
  * \fn     decode_cpu_reg(const char *p_asc, Byte *p_ret)
@@ -75,6 +76,20 @@ static Boolean decode_cpu_reg(const char *p_asc, Byte *p_ret)
     if (!as_strcasecmp(p_asc, reg_names[z]))
     {
       *p_ret = reg_vals[z];
+      return True;
+    }
+  return False;
+}
+
+static Boolean decode_053248_reg(const char *p_asc, Byte *p_ret)
+{
+  static const char *const names[] = { "A", "B", "X", "Y", "DP", "U", "S", "PC" };
+  size_t z;
+
+  for (z = 0; z < as_array_size(names); z++)
+    if (!as_strcasecmp(p_asc, names[z]))
+    {
+      *p_ret = z;
       return True;
     }
   return False;
@@ -143,7 +158,7 @@ static unsigned ChkZero(const char *s, Byte *Erg)
 
 static Boolean MayShort(Integer Arg)
 {
-  return ((Arg >= -128) && (Arg < 127));
+  return ((Arg >= -128) && (Arg < (Is053248 ? 128 : 127)));
 }
 
 static Boolean IsZeroOrEmpty(const tStrComp *pArg)
@@ -315,6 +330,14 @@ static adr_mode_t DecodeAdr(int ArgStartIdx, int ArgEndIdx,
 
     /* mit Index */
 
+    if (Is053248 && (EReg == IDX_PCREG) && !*pStartArg->str.p_str)
+    {
+      p_vals->cnt = 1;
+      p_vals->vals[0] |= 0x06;
+      p_vals->mode = e_adr_mode_ind;
+      goto chk_mode;
+    }
+
     if (!as_strcasecmp(pStartArg->str.p_str, "A"))
     {
       p_vals->cnt = 1;
@@ -340,9 +363,10 @@ static adr_mode_t DecodeAdr(int ArgStartIdx, int ArgEndIdx,
     /* Displacement auswerten */
 
     Offset = ChkZero(pStartArg->str.p_str, &ZeroMode);
+    /* 053248 PC offsets use the displacement field itself as their base. */
     if (EReg == IDX_PCREG)
       AdrInt = EvalStrIntExpressionOffs(pStartArg, Offset, UInt16, &OK)
-             - (EProgCounter() + 2 + OpcodeLen);
+             - (EProgCounter() + 2 + (Is053248 ? 0 : OpcodeLen));
     else if (ZeroMode > 1)
       AdrInt = EvalStrIntExpressionOffs(pStartArg, Offset, SInt8, &OK);
     else
@@ -382,7 +406,7 @@ static adr_mode_t DecodeAdr(int ArgStartIdx, int ArgEndIdx,
       p_vals->mode = e_adr_mode_ind;
       p_vals->cnt = 3;
       p_vals->vals[0] += 0x05;
-      if (EReg == IDX_PCREG)
+      if ((EReg == IDX_PCREG) && !Is053248)
         AdrInt--;
       p_vals->vals[1] = Hi(AdrInt);
       p_vals->vals[2] = Lo(AdrInt);
@@ -501,7 +525,8 @@ static void decode_idx(Word code)
     switch (DecodeAdr(1, ArgCnt, eSymbolSizeUnknown, adr_mode_mask_ind, &adr_vals))
     {
       case e_adr_mode_ind:
-        BAsmCode[CodeLen++] = code;
+        BAsmCode[CodeLen++] = (Is053248 && (code == 0x82)
+                                && !as_strcasecmp(AttrPart.str.p_str, "NF")) ? 0xd1 : code;
         append_adr_vals(&adr_vals);
         break;
       default:
@@ -649,7 +674,23 @@ static void decode_bset(Word code)
 
 static void decode_exg_tfr(Word code)
 {
-  DecodeTFR_TFM_EXG_6809(code, False, decode_cpu_reg, True);
+  if (!Is053248)
+    DecodeTFR_TFM_EXG_6809(code, False, decode_cpu_reg, True);
+  else if (ChkArgCnt(2, 2))
+  {
+    Byte src, dst;
+
+    if (!decode_053248_reg(ArgStr[1].str.p_str, &src))
+      WrStrErrorPos(ErrNum_InvRegName, &ArgStr[1]);
+    else if (!decode_053248_reg(ArgStr[2].str.p_str, &dst))
+      WrStrErrorPos(ErrNum_InvRegName, &ArgStr[2]);
+    else
+    {
+      /* Both primary opcodes use bit 7 for copy (set) vs exchange (clear). */
+      BAsmCode[CodeLen++] = Lo(code);
+      BAsmCode[CodeLen++] = (dst << 4) | src | (Hi(code) ? 0x80 : 0);
+    }
+  }
 }
 
 /*!------------------------------------------------------------------------
@@ -756,6 +797,18 @@ static void init_fields(void)
   add_null_pseudo(InstTable);
 
   add_reg_16("LEA", 0x08, 1, decode_idx);
+  if (Is053248)
+  {
+    AddInstTable(InstTable, "RESET", 0x00, decode_inh);
+    AddInstTable(InstTable, "NMI", 0x02, decode_inh);
+    AddInstTable(InstTable, "FIRQ", 0x03, decode_inh);
+    AddInstTable(InstTable, "IRQ", 0x04, decode_inh);
+    AddInstTable(InstTable, "LEAX05", 0x05, decode_idx);
+    AddInstTable(InstTable, "LEAX06", 0x06, decode_idx);
+    AddInstTable(InstTable, "LEAX07", 0x07, decode_idx);
+    AddInstTable(InstTable, "SWI", 0x5d, decode_inh);
+    AddInstTable(InstTable, "CLRNF", 0xd1, decode_idx);
+  }
   add_reg_stack("PSH", 0x0c, DecodeStack_6809);
   add_reg_stack("PUL", 0x0e, DecodeStack_6809);
   add_ari_8("LD"  , 0x10);
@@ -774,7 +827,12 @@ static void init_fields(void)
   AddInstTable(InstTable, "ANDCC", 0x3c, decode_imm_8);
   AddInstTable(InstTable, "ORCC", 0x3d, decode_imm_8);
   AddInstTable(InstTable, "EXG", 0x3e, decode_exg_tfr);
-  AddInstTable(InstTable, "TFR", 0x3f, decode_exg_tfr);
+  AddInstTable(InstTable, "TFR", Is053248 ? 0x013f : 0x3f, decode_exg_tfr);
+  if (Is053248)
+  {
+    AddInstTable(InstTable, "TFR3E", 0x013e, decode_exg_tfr);
+    AddInstTable(InstTable, "EXG3F", 0x3f, decode_exg_tfr);
+  }
   AddInstTable(InstTable, "LDD", 0x8140, decode_ari);
   add_reg_16("LD", 0x8142, 2, decode_ari);
   AddInstTable(InstTable, "CMPD", 0x814a, decode_ari);
@@ -872,6 +930,10 @@ static void deinit_fields(void)
 
 static Boolean decode_attr_part_ko09(void)
 {
+  if (Is053248 && !as_strcasecmp(OpPart.str.p_str, "CLR")
+      && !as_strcasecmp(AttrPart.str.p_str, "NF"))
+    return True;
+
   if (strlen(AttrPart.str.p_str) > 1)
   {
     WrStrErrorPos(ErrNum_UndefAttr, &AttrPart);
@@ -912,9 +974,9 @@ static Boolean is_def_ko09(void)
  * \brief  switch to target
  * ------------------------------------------------------------------------ */
 
-static void switch_to_ko09(void)
+static void switch_to_ko09_core(void)
 {
-  const TFamilyDescr *p_descr = FindFamilyByName("052001");
+  const TFamilyDescr *p_descr = FindFamilyByName(Is053248 ? "053248" : "052001");
   static const as_assume_rec_t ASSUME09s[] =
   {
     { "DPR", &DPRValue, 0, 0xff, 0x100, NULL }
@@ -945,6 +1007,18 @@ static void switch_to_ko09(void)
   assume_set(ASSUME09s, as_array_size(ASSUME09s));
 }
 
+static void switch_to_ko09(void)
+{
+  Is053248 = False;
+  switch_to_ko09_core();
+}
+
+static void switch_to_053248(void)
+{
+  Is053248 = True;
+  switch_to_ko09_core();
+}
+
 /*!------------------------------------------------------------------------
  * \fn     codeko09_init(void)
  * \brief  attach target
@@ -953,4 +1027,5 @@ static void switch_to_ko09(void)
 void codeko09_init(void)
 {
   (void)AddCPU("052001", switch_to_ko09);
+  (void)AddCPU("053248", switch_to_053248);
 }

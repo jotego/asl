@@ -223,7 +223,7 @@ folgende Prozessorfamilien implementiert:
 \item{Freescale/NXP S12Z (''MagniV'')}
 \item{Freescale 68RS08}
 \item{Motorola 68HC16}
-\item{Konami 052001}
+\item{Konami 052001, 053248}
 \item{Hitachi H8/300(H)}
 \item{Hitachi H8/500}
 \item{Hitachi SH}
@@ -3574,12 +3574,16 @@ variieren.
 \end{cpulist}
 %%-----------
 \begin{cpulist}
-   052001
+   052001, 053248
 \end{cpulist}
 Dieser Baustein ist eine Eigenentwicklung von Konami und in
 Architektur und Befehlssatz an den Motorola 6809 angelehnt.
 Er ist jedoch nicht bin"arkompatibel und stellt auch nicht
 alle Befehle und Adressierungsarten des Vorbilds zur Verf"ugung.
+Der 053248-Prozessortyp erg"anzt die gemessenen Befehle RESET, NMI,
+FIRQ, IRQ, SWI und CLR.NF sowie drei weitere LEAX-Codierungen.
+PC-relative Indizierung verwendet die Adresse des Displacement-Felds
+als Basis.
 %%-----------
 \begin{cpulist}
    HD6413308 $\longrightarrow$ HD6413309
@@ -16902,4 +16906,3 @@ mit einer Geldstrafe belegt.''\\
 \printindex
 
 \end{document}
-

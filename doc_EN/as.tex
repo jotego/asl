@@ -227,7 +227,7 @@ following processor families have been implemented:
 \item{Freescale/NXP S12Z (''MagniV'')}
 \item{Motorola 68HC16}
 \item{Freescale 68RS08}
-\item{Konami 052001}
+\item{Konami 052001, 053248}
 \item{Hitachi H8/300(H)}
 \item{Hitachi H8/500}
 \item{Hitachi SH}
@@ -3475,12 +3475,22 @@ vary from device to device.
 \end{cpulist}
 %%-----------
 \begin{cpulist}
-   052001
+   052001, 053248
 \end{cpulist}
 This chip is an own creation of Konami and similar to the
 Motorola 6809 in architecture an instruction set.  However,
 it is not binary compatible and does not provide all instructions
 and addressing modes of its 'role model'.
+The 053248 target adds the measured RESET, NMI, FIRQ, IRQ, SWI, and
+CLR.NF instructions.  LEAX05, LEAX06, and LEAX07 select the three
+additional LEAX opcodes; LEAX retains opcode 08.  CLRNF is an alias
+for CLR.NF.  The 053248 transfer selectors are A=0, B=1, X=2, Y=3,
+DP=4, U=5, S=6, and PC=7.  EXG uses opcode 3E with postbyte bit 7
+clear, while TFR uses opcode 3F with bit 7 set.  EXG3F and TFR3E
+select the other valid primary opcode with the same exchange or copy
+behavior.  For indexed PC displacements, a target address is relative
+to the displacement field, rather than the end of the instruction.
+The 052001 target retains its existing encodings.
 %%-----------
 \begin{cpulist}
    HD6413308 $\rightarrow$ HD6413309

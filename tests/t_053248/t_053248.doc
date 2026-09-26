@@ -1,0 +1,2 @@
+053248 physical instruction encodings, transfer selectors, PC displacement base,
+and unchanged 052001 behavior after switching CPU types.

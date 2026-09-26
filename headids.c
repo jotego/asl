@@ -72,6 +72,7 @@ static const TFamilyDescr Descrs[] =
   { "68HC16"       , 0x0065, eHexFormatMotoS   , get_granularity_default },
   { "68RS08"       , 0x005e, eHexFormatMotoS   , get_granularity_default },
   { "052001"       , 0x0022, eHexFormatMotoS   , get_granularity_default },
+  { "053248"       , 0x0080, eHexFormatMotoS   , get_granularity_default },
   { "H8/300(H)"    , 0x0068, eHexFormatMotoS   , get_granularity_default },
   { "H8/500"       , 0x0069, eHexFormatMotoS   , get_granularity_default },
   { "H16"          , 0x0040, eHexFormatMotoS   , get_granularity_default },
